@@ -1,0 +1,2 @@
+Orig: 81.5
+Remove prev and next: 78.1
