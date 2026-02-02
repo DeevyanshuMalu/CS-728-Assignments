@@ -1,6 +1,6 @@
 import json
 import torch
-
+import re
 
 def load_jsonl(path):
     data = []
@@ -104,3 +104,8 @@ class NERDataset(torch.utils.data.Dataset):
 def collate_fn(batch):
     tokens, tags = zip(*batch)
     return torch.cat(tokens), torch.cat(tags)
+
+def preprocess(text):
+    text = text.lower()
+    tokens = re.findall(r"\b[a-z0-9]+\b", text)
+    return tokens

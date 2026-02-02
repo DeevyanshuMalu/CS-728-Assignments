@@ -1,0 +1,8 @@
+ccnews: "../../updated_vocab_document_dict.json"
+conll_vocab: "./conll_data/vocab.json"
+window_size: 5
+embedding_dimension: 200
+x_max: 100
+alpha: 0.75
+lr: 0.05
+epochs: 50
