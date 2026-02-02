@@ -75,11 +75,12 @@ def test(args):
     print(report)
 
     print("\nPerformance Evaluation (excluding 'O'):")
-    labels_no_o = [l for l in labels if l != "0" and l != "O"]
+    labels_no_o = [l for l in labels if l != "0"]
     report_no_o = metrics.flat_classification_report(
         y_test, y_pred, labels=labels_no_o, digits=3
     )
     print(report_no_o)
+
 
 def main():
     parser = argparse.ArgumentParser(description="NER using CRF")
@@ -117,6 +118,7 @@ def main():
         test(args)
     elif args.mode == "top_features":
         print_top_features(args)
+
 
 if __name__ == "__main__":
     main()
