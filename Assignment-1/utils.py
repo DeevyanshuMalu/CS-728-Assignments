@@ -122,3 +122,40 @@ def preprocess(text):
     tokens = re.split(r'[\s\n]+', text)
     tokens = [t for t in tokens if t]
     return tokens
+
+
+def cosine_sim(vec1, vec2):
+    import numpy as np
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+    return float(np.dot(vec1, vec2) / (norm1 * norm2))
+
+
+def get_neighbors(embeddings, word, vocab, k=5):
+    """Get top-k similar words using cosine similarity"""
+    import numpy as np
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    if hasattr(embeddings, 'numpy'):
+        embeddings = embeddings.numpy()
+
+    if word not in vocab:
+        return []
+
+    word_idx = vocab[word]
+    word_vec = embeddings[word_idx].reshape(1, -1)
+    sims = cosine_similarity(word_vec, embeddings)[0]
+
+    idx2word = {v: k for k, v in vocab.items()}
+    top_idx = np.argsort(sims)[::-1]
+
+    neighbors = []
+    for idx in top_idx:
+        if idx != word_idx:
+            neighbors.append((idx2word[idx], sims[idx]))
+            if len(neighbors) >= k:
+                break
+
+    return neighbors
