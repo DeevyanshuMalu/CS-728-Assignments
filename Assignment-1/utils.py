@@ -1,4 +1,5 @@
 import json
+from pydoc import text
 import torch
 import re
 
@@ -105,7 +106,19 @@ def collate_fn(batch):
     tokens, tags = zip(*batch)
     return torch.cat(tokens), torch.cat(tags)
 
+# def chunk_text(text, tokenizer, max_length=512):
+#     tokens = tokenizer.encode(text)
+#     chunks = []
+    
+#     for i in range(0, len(tokens), max_length):
+#         chunk = tokens[i:i + max_length]
+#         chunks.append(tokenizer.decode(chunk))
+    
+#     return chunks
+
+# Process each chunk separately
 def preprocess(text):
     text = text.lower()
-    tokens = re.findall(r"\b[a-z0-9]+\b", text)
+    tokens = re.split(r'[\s\n]+', text)
+    tokens = [t for t in tokens if t]
     return tokens

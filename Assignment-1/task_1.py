@@ -6,11 +6,26 @@ import os
 import yaml
 from collections import defaultdict
 from utils import preprocess
+from scipy.sparse import coo_matrix, save_npz
+from scipy.sparse import load_npz
+from tqdm import tqdm
+from collections import Counter
+from glove_training import train_glove, get_embeddings, plot_loss
 
 # Loss function
 def loss_function(cooc_matrix, word_vectors):
     # Compute the loss based on the co-occurrence matrix and the word vectors
     pass
+
+def save_matrix(rows, cols, vals, vocab_size):
+    # Create sparse matrix
+    cooccurrence_matrix = coo_matrix((vals, (rows, cols)), shape=(vocab_size, vocab_size))
+    save_npz(cooc_path, cooccurrence_matrix)
+
+# Load
+def load_matrix(path):
+    loaded_matrix = load_npz(path)
+    return loaded_matrix
 
 # Loading parameters
 yaml_file = "specifications.yaml"
@@ -25,11 +40,12 @@ alpha = specs.get("alpha")
 lr = specs.get("lr")
 conll_vocab_path = specs.get("conll_vocab")
 epochs = specs.get("epochs")
+cooc_path = specs.get("cooc_path")
 if not ccnews_path:
     raise ValueError("ccnews path not found in specifications.yaml")
 
 # Encodings
-word2id={}
+conll_vocab={}
 cooc_matrix = defaultdict(float)
 
 # Debugging
@@ -39,47 +55,76 @@ with open(ccnews_path, 'r', encoding='utf-8') as f:
     corpus = list(data.values())
 
 for i in vocab:
-    word2id[i] = len(word2id)
+    conll_vocab[i] = len(conll_vocab)
 
 if os.path.exists(conll_vocab_path):
     with open(conll_vocab_path, 'r', encoding='utf-8') as f:
         conll_vocab = json.load(f)
 else:
     with open(conll_vocab_path, 'w', encoding='utf-8') as f:
-        json.dump(word2id, f, ensure_ascii=False, indent=2)
-    conll_vocab = word2id
+        json.dump(conll_vocab, f, ensure_ascii=False, indent=2)
 
 # Preprocessing the set
-# with open(ccnews_path, 'r', encoding='utf-8') as f:
-#     data = json.load(f)
-#     for vocab,corpus in data.items():
-#         word2id[corpus[0][0]] = vocab
-#     for vocab,corpus in data.items():
-#         for item in corpus:
-#             idx = item[0]
-#             passage = item[1]
-#             tokens = preprocess(passage)
-#             for i in range(max(idx-window_size,0),min(idx+window_size,len(tokens))):
-#                 context_word = tokens[i]
-#                 if context_word != tokens[idx]:
-#                     cooc_matrix[word2id[tokens[idx]], word2id[context_word]] += 1
-    # for item in corpus:
-    #     idx, passage = item[0]
-    #     print("passage:", len(passage))
-    #     tokens = preprocess(passage)
-    #     print("tokens:", len(tokens))
-    #     print("idx:", idx)
-    #     for i in range(max(idx-window_size,0),min(idx+window_size,len(tokens))):
-    #         context_word = tokens[i]
-    #         if context_word != tokens[idx]:
-    #             cooc_matrix[word2int[tokens[idx]], word2int[context_word]] += 1
+if cooc_path and os.path.exists(cooc_path):
+    cooc_matrix = load_matrix(cooc_path)
+    rows = cooc_matrix.row
+    cols = cooc_matrix.col
+    vals = cooc_matrix.data
+else:
+    for target, values in tqdm(data.items(), desc="Processing"):
+        if target not in conll_vocab:
+            raise Exception("Target not found in vocab")
+        target_id = conll_vocab[target]
+        target = target.lower()
+        for idx, passage in values:
+            tokens = preprocess(passage)
+            if target not in tokens:
+                print("Target:", target)
+                print("Passage:", passage)
+                raise Exception("Target not found in tokens")
+            
+            target_idx = tokens.index(target)
+            left = max(target_idx - window_size, 0)
+            right = min(target_idx + window_size + 1, len(tokens))
+            context_tokens = tokens[left:target_idx] + tokens[target_idx+1:right]
+            context_ids = [conll_vocab[w] for w in context_tokens if w in conll_vocab]
+            for context_id in context_ids:
+                cooc_matrix[target_id, context_id] += 1
+
+    # Saving Sparse Matrix
+    rows, cols, vals = zip(*[(i, j, x) for (i, j), x in cooc_matrix.items()])
+    rows = np.array(rows, dtype=np.int32)
+    cols = np.array(cols, dtype=np.int32)
+    vals = np.array(vals, dtype=np.float32)
+    save_matrix(rows, cols, vals, len(conll_vocab))
+    # print("rows:", rows[:5])
+    # print("cols:", cols[:5])
+    # print("vals:", vals[:5])
 
 # Training
-# rows, cols, vals = zip(*[(i, j, x) for (i, j), x in cooc_matrix.items()])
-# rows = np.array(rows, dtype=np.int32)
-# cols = np.array(cols, dtype=np.int32)
-# vals = np.array(vals, dtype=np.float32)
+model = train_glove(
+    rows=rows,
+    cols=cols,
+    vals=vals,
+    vocab_size=len(conll_vocab),
+    embedding_dim=embedding_dimension,
+    epochs=epochs,
+    batch_size=512,
+    learning_rate=lr,
+    x_max=x_max,
+    alpha=alpha,
+    device='cuda' if torch.cuda.is_available() else 'cpu'
+)
 
-# print("rows:", rows[:5])
-# print("cols:", cols[:5])
-# print("vals:", vals[:5])
+plot_loss(model.epoch_losses, embedding_dimension, lr, 512, x_max, alpha, save_path='loss_plot.png')
+# Get final embeddings
+embeddings = get_embeddings(model)
+
+# Save embeddings
+np.save('glove_embeddings.npy', embeddings)
+np.save('vocab.npy', vocab)
+
+print(f"Training complete! Embeddings shape: {embeddings.shape}")
+
+# Save the model
+torch.save(model.state_dict(), 'glove_model.pth')
