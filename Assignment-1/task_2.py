@@ -8,6 +8,7 @@ from scipy.sparse import lil_matrix
 from sklearn.decomposition import TruncatedSVD
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
+from utils import preprocess
 
 # Loading parameters
 yaml_file = "specifications.yaml"
@@ -65,7 +66,10 @@ for word, passages in tqdm(ccnews_data.items(), desc="Building matrix"):
     for doc_idx, passage in passages:
         h = hashlib.md5(passage.encode('utf-8')).hexdigest()
         d_idx = doc_hashes[h]
-        Z[word_idx, d_idx] += 1
+        # Count actual occurrences of word in passage
+        tokens = preprocess(passage)
+        count = tokens.count(word)
+        Z[word_idx, d_idx] += count
 
 Z = Z.tocsr()
 print(f"Matrix shape: {Z.shape}, non-zero: {Z.nnz}")
