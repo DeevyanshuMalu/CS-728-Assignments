@@ -3,6 +3,7 @@ import torch
 import re
 from scipy.sparse import coo_matrix, save_npz
 from scipy.sparse import load_npz
+
 def load_jsonl(path):
     data = []
     with open(path, "r", encoding="utf-8") as f:

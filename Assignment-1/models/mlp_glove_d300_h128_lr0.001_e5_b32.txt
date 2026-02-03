@@ -1,0 +1,33 @@
+Performance Evaluation:
+              precision    recall  f1-score   support
+
+           O      0.930     0.994     0.961     38315
+       B-ORG      0.789     0.513     0.622      1661
+      B-MISC      0.765     0.662     0.710       702
+       B-PER      0.797     0.427     0.556      1617
+       I-PER      0.507     0.167     0.251      1156
+       B-LOC      0.795     0.743     0.768      1668
+       I-ORG      0.663     0.475     0.554       835
+      I-MISC      0.709     0.565     0.629       216
+       I-LOC      0.657     0.506     0.571       257
+
+    accuracy                          0.908     46427
+   macro avg      0.734     0.561     0.625     46427
+weighted avg      0.895     0.908     0.895     46427
+
+
+Performance Evaluation (excluding 'O'):
+              precision    recall  f1-score   support
+
+       B-ORG      0.789     0.513     0.622      1661
+      B-MISC      0.765     0.662     0.710       702
+       B-PER      0.797     0.427     0.556      1617
+       I-PER      0.507     0.167     0.251      1156
+       B-LOC      0.795     0.743     0.768      1668
+       I-ORG      0.663     0.475     0.554       835
+      I-MISC      0.709     0.565     0.629       216
+       I-LOC      0.657     0.506     0.571       257
+
+   micro avg      0.748     0.504     0.602      8112
+   macro avg      0.710     0.507     0.583      8112
+weighted avg      0.730     0.504     0.585      8112
