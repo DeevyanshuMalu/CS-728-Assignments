@@ -3,7 +3,7 @@ conll_vocab: "./conll_data/vocab.json"
 cooc_path: "./ccnews_data/cooccurrence.npz"
 
 window_size: 3
-embedding_dimension: 50
+embedding_dimension: 300
 x_max: 100
 alpha: 0.75
 lr: 0.5

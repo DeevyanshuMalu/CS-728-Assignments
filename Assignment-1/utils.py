@@ -1,8 +1,8 @@
 import json
-from pydoc import text
 import torch
 import re
-
+from scipy.sparse import coo_matrix, save_npz
+from scipy.sparse import load_npz
 def load_jsonl(path):
     data = []
     with open(path, "r", encoding="utf-8") as f:
@@ -159,3 +159,13 @@ def get_neighbors(embeddings, word, vocab, k=5):
                 break
 
     return neighbors
+
+def save_matrix(rows, cols, vals, vocab_size,path):
+    # Create sparse matrix
+    cooccurrence_matrix = coo_matrix((vals, (rows, cols)), shape=(vocab_size, vocab_size))
+    save_npz(path, cooccurrence_matrix)
+
+# Load
+def load_matrix(path):
+    loaded_matrix = load_npz(path)
+    return loaded_matrix

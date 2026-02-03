@@ -5,27 +5,10 @@ import numpy as np
 import os
 import yaml
 from collections import defaultdict
-from utils import preprocess
-from scipy.sparse import coo_matrix, save_npz
-from scipy.sparse import load_npz
+from utils import preprocess, save_matrix, load_matrix
 from tqdm import tqdm
 from collections import Counter
 from glove_training import train_glove, get_embeddings, plot_loss
-
-# Loss function
-def loss_function(cooc_matrix, word_vectors):
-    # Compute the loss based on the co-occurrence matrix and the word vectors
-    pass
-
-def save_matrix(rows, cols, vals, vocab_size):
-    # Create sparse matrix
-    cooccurrence_matrix = coo_matrix((vals, (rows, cols)), shape=(vocab_size, vocab_size))
-    save_npz(cooc_path, cooccurrence_matrix)
-
-# Load
-def load_matrix(path):
-    loaded_matrix = load_npz(path)
-    return loaded_matrix
 
 # Loading parameters
 yaml_file = "specifications.yaml"
@@ -96,10 +79,7 @@ else:
     rows = np.array(rows, dtype=np.int32)
     cols = np.array(cols, dtype=np.int32)
     vals = np.array(vals, dtype=np.float32)
-    save_matrix(rows, cols, vals, len(conll_vocab))
-    # print("rows:", rows[:5])
-    # print("cols:", cols[:5])
-    # print("vals:", vals[:5])
+    save_matrix(rows, cols, vals, len(conll_vocab),cooc_path)
 
 # Training
 model = train_glove(
@@ -116,15 +96,15 @@ model = train_glove(
     device='cuda' if torch.cuda.is_available() else 'cpu'
 )
 
-plot_loss(model.epoch_losses, embedding_dimension, lr, 512, x_max, alpha, save_path='loss_plot.png')
+plot_loss(model.epoch_losses, embedding_dimension, lr, 512, x_max, alpha, save_path=f'loss_plot_{embedding_dimension}_{window_size}_{lr}.png')
 # Get final embeddings
 embeddings = get_embeddings(model)
 
 # Save embeddings
-np.save('glove_embeddings.npy', embeddings)
+np.save(f"glove_embeddings_{embedding_dimension}_{window_size}_{lr}.npy", embeddings)
 np.save('vocab.npy', vocab)
 
 print(f"Training complete! Embeddings shape: {embeddings.shape}")
 
 # Save the model
-torch.save(model.state_dict(), 'glove_model.pth')
+torch.save(model.state_dict(), f'glove_model_{embedding_dimension}_{window_size}_{lr}.pth')

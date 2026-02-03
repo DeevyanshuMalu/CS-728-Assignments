@@ -113,9 +113,7 @@ def get_embeddings(model):
     with torch.no_grad():
         word_vecs = model.w_embeddings.weight.cpu().numpy()
         context_vecs = model.w_context.weight.cpu().numpy()
-        
-        # Average word and context vectors (standard practice)
-        embeddings = (word_vecs + context_vecs) / 2
+        embeddings = (word_vecs + context_vecs) 
     
     return embeddings
 
