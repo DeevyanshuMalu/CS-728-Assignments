@@ -81,6 +81,15 @@ def test(args):
     )
     print(report_no_o)
 
+    # Save reports to file
+    report_path = args.model_path.replace(".joblib", ".txt")
+    with open(report_path, "w") as f:
+        f.write("Performance Evaluation:\n")
+        f.write(report)
+        f.write("\n\nPerformance Evaluation (excluding 'O'):\n")
+        f.write(report_no_o)
+    print(f"Classification reports saved to {report_path}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="NER using CRF")
