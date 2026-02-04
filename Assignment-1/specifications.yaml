@@ -12,3 +12,6 @@ epochs: 75
 svd_dimensions: [50, 100, 200, 300]
 svd_output_dir: "./embeddings"
 query_words: ["president", "city", "computer"]
+
+best_svd_d: 100
+tfidf_query_words: ["president", "running", "London", "beautiful", "attack"]

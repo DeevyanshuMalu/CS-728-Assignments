@@ -17,9 +17,9 @@ with open(yaml_file, "r", encoding="utf-8") as f:
 
 ccnews_path = specs.get("ccnews")
 conll_vocab_path = specs.get("conll_vocab")
-svd_dimensions = specs.get("svd_dimensions", [50, 100, 200, 300])
-svd_output_dir = specs.get("svd_output_dir", "./embeddings")
-query_words = specs.get("query_words", ["president", "city", "computer"])
+svd_dimensions = specs.get("svd_dimensions")
+svd_output_dir = specs.get("svd_output_dir")
+query_words = specs.get("query_words")
 
 if not ccnews_path:
     raise ValueError("ccnews path not found in specifications.yaml")
@@ -66,9 +66,8 @@ for word, passages in tqdm(ccnews_data.items(), desc="Building matrix"):
     for doc_idx, passage in passages:
         h = hashlib.md5(passage.encode('utf-8')).hexdigest()
         d_idx = doc_hashes[h]
-        # Count actual occurrences of word in passage
         tokens = preprocess(passage)
-        count = tokens.count(word)
+        count = tokens.count(word.lower())
         Z[word_idx, d_idx] += count
 
 Z = Z.tocsr()
