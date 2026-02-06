@@ -119,7 +119,6 @@ def collate_fn(batch):
 
 # Process each chunk separately
 def preprocess(text):
-    text = text.lower()
     tokens = re.split(r'[\s\n]+', text)
     tokens = [t for t in tokens if t]
     return tokens

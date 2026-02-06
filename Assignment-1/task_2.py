@@ -67,7 +67,7 @@ for word, passages in tqdm(ccnews_data.items(), desc="Building matrix"):
         h = hashlib.md5(passage.encode('utf-8')).hexdigest()
         d_idx = doc_hashes[h]
         tokens = preprocess(passage)
-        count = tokens.count(word.lower())
+        count = tokens.count(word)
         Z[word_idx, d_idx] += count
 
 Z = Z.tocsr()
