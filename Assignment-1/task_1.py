@@ -8,7 +8,7 @@ from collections import defaultdict
 from utils import preprocess, save_matrix, load_matrix
 from tqdm import tqdm
 from collections import Counter
-from glove_training import train_glove, get_embeddings, plot_loss
+from glove_training import train_glove, get_embeddings, plot_loss, plot_latency
 
 # Loading parameters
 yaml_file = "specifications.yaml"
@@ -35,6 +35,7 @@ if not ccnews_path:
 # Encodings
 conll_vocab={}
 cooc_matrix = defaultdict(float)
+avg_latency = []
 
 # Debugging
 with open(ccnews_path, 'r', encoding='utf-8') as f:
@@ -105,6 +106,7 @@ for w in window_size:
             )
 
             plot_loss(model.epoch_losses, e, r, 512, x_max, alpha, save_path=ppath+f'loss_plot_{e}_{w}_{r}.png')
+            avg_latency.append(np.mean(model.epoch_latencies))
             # Get final embeddings
             embeddings = get_embeddings(model)
 
@@ -124,3 +126,4 @@ for w in window_size:
                         f.write(f"{q}: {q_emb.tolist()}\n")
                     else:
                         f.write(f"{q}: Not found in vocab\n")
+    plot_latency(avg_latency, embedding_dimension, lr[0], save_path=ppath+f'latency_plot_{w}.png')

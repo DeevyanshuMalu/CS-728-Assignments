@@ -5,6 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import time
 
 class GloVeDataset(Dataset):
     def __init__(self, rows, cols, vals):
@@ -23,6 +24,7 @@ class GloVeModel(nn.Module):
     def __init__(self, vocab_size, embedding_dim):
         super(GloVeModel, self).__init__()
         self.epoch_losses = []
+        self.epoch_latencies = []
         # Word embeddings (main and context)
         self.w_embeddings = nn.Embedding(vocab_size, embedding_dim)
         self.w_context = nn.Embedding(vocab_size, embedding_dim)
@@ -77,7 +79,7 @@ def train_glove(rows, cols, vals, vocab_size, embedding_dim=100,
     model.train()
     for epoch in range(epochs):
         total_loss = 0
-        
+        start_time = time.time()
         pbar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{epochs}')
         for target_ids, context_ids, cooc_counts in pbar:
             target_ids = target_ids.to(device)
@@ -99,7 +101,7 @@ def train_glove(rows, cols, vals, vocab_size, embedding_dim=100,
             
             total_loss += loss.item()
             pbar.set_postfix({'loss': f'{loss.item():.4f}'})
-        
+            model.epoch_latencies.append(time.time() - start_time)
         avg_loss = total_loss / len(dataloader)
         model.epoch_losses.append(avg_loss)
         print(f'Epoch {epoch+1}/{epochs}, Average Loss: {avg_loss:.4f}')
@@ -155,3 +157,41 @@ def plot_loss(epoch_losses, embedding_dim, learning_rate, batch_size, x_max, alp
     plt.show()
     
     print(f"Plot saved to {save_path}")
+
+def plot_latency(latency, embedding_dims, learning_rate, save_path='latency_plot.png'):
+    """
+    Plot Latency/epoch vs embedding dimension
+   """
+    plt.figure(figsize=(12, 7))
+    
+    # Plot latency vs embedding dimension
+    plt.plot(embedding_dims, latency, marker='o', linewidth=2, markersize=8, 
+             color='steelblue', label=f'LR: {learning_rate}')
+    
+    # Styling
+    plt.xlabel('Embedding Dimension', fontsize=12, fontweight='bold')
+    plt.ylabel('Latency/epoch (seconds)', fontsize=12, fontweight='bold')
+    plt.title('Latency/epoch vs Embedding Dimension', fontsize=14, fontweight='bold')
+    plt.grid(True, alpha=0.3, linestyle='--')
+    plt.legend(fontsize=10, loc='best')
+    
+    # Add statistics text box
+    stats_text = (
+        f'Statistics:\n'
+        f'Min Avg Latency: {min(latency):.2f}s\n'
+        f'Max Avg Latency: {max(latency):.2f}s\n'
+        f'Dims Tested: {len(embedding_dims)}\n'
+        f'LR: {learning_rate}'
+    )
+    
+    # Position text box
+    plt.text(0.02, 0.98, stats_text,
+             transform=plt.gca().transAxes,
+             fontsize=10,
+             verticalalignment='top',
+             bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    # plt.show()
+    print(f"Latency/epoch plot saved to {save_path}")
