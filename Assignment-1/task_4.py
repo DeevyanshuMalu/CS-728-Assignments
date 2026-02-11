@@ -233,7 +233,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--embed_type",
         type=str,
-        choices=["glove", "svd"],
+        choices=["glove", "svd", "svd_tfidf"],
         default="glove",
         help="Embedding type",
     )
@@ -253,6 +253,11 @@ if __name__ == "__main__":
 
     if args.embed_type == "svd":
         embeddings = np.load(f"embeddings/svd_embeddings_d{args.embed_dim}.npy")
+        embeddings = normalize(embeddings, axis=1)
+        embeddings = torch.from_numpy(embeddings).to(device)
+        assert args.embed_dim == embeddings.shape[1]
+    elif args.embed_type == "svd_tfidf":
+        embeddings = np.load(f"embeddings/svd_tfidf_embeddings_d{args.embed_dim}.npy")
         embeddings = normalize(embeddings, axis=1)
         embeddings = torch.from_numpy(embeddings).to(device)
         assert args.embed_dim == embeddings.shape[1]
