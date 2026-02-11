@@ -18,8 +18,8 @@ with open(yaml_file, "r", encoding="utf-8") as f:
 
 ccnews_path = specs.get("ccnews")
 conll_vocab_path = specs.get("conll_vocab")
+svd_dimensions = specs.get("svd_dimensions")
 svd_output_dir = specs.get("svd_output_dir")
-best_d = specs.get("best_svd_d")
 tfidf_query_words = specs.get("tfidf_query_words")
 
 if not ccnews_path:
@@ -111,56 +111,54 @@ def get_neighbors(embeddings, word, vocab, k=5):
     return neighbors
 
 
-# SVD on TF-IDF matrix at best d
-print(f"\n{'='*50}")
-print(f"TF-IDF SVD with d={best_d}")
-print('='*50)
+# SVD on TF-IDF matrix for each dimension
+for d in svd_dimensions:
+    print(f"\n{'='*50}")
+    print(f"TF-IDF SVD with d={d}")
+    print('='*50)
 
-svd = TruncatedSVD(n_components=best_d, algorithm='randomized', random_state=42)
-W_tfidf = svd.fit_transform(Z_tfidf)
+    svd = TruncatedSVD(n_components=d, algorithm='randomized', random_state=42)
+    W_tfidf = svd.fit_transform(Z_tfidf)
 
-print(f"Explained variance: {svd.explained_variance_ratio_.sum():.4f}")
-print(f"Embeddings shape: {W_tfidf.shape}")
+    print(f"Explained variance: {svd.explained_variance_ratio_.sum():.4f}")
+    print(f"Embeddings shape: {W_tfidf.shape}")
 
-# Save TF-IDF SVD embeddings
-np.save(f'{svd_output_dir}/svd_tfidf_embeddings_d{best_d}.npy', W_tfidf)
+    # Save TF-IDF SVD embeddings
+    np.save(f'{svd_output_dir}/svd_tfidf_embeddings_d{d}.npy', W_tfidf)
 
-# Also save in torch format for task_4 compatibility
-torch.save({
-    'embeddings': torch.tensor(W_tfidf, dtype=torch.float32),
-    'vocab': vocab,
-    'dimension': best_d
-}, f'{svd_output_dir}/svd_tfidf_embeddings_d{best_d}.pt')
+    # Also save in torch format for task_4 compatibility
+    torch.save({
+        'embeddings': torch.tensor(W_tfidf, dtype=torch.float32),
+        'vocab': vocab,
+        'dimension': d
+    }, f'{svd_output_dir}/svd_tfidf_embeddings_d{d}.pt')
 
-print(f"TF-IDF SVD embeddings saved to {svd_output_dir}/")
+    print(f"TF-IDF SVD embeddings saved to {svd_output_dir}/")
 
-# Quality Check 1: Compare Raw SVD vs TF-IDF SVD neighbors
-print(f"\n{'='*50}")
-print("Quality Check 1: Raw SVD vs TF-IDF SVD (top-5 neighbors)")
-print('='*50)
+    # Quality Check 1: Compare Raw SVD vs TF-IDF SVD neighbors
+    print(f"\nQuality Check 1: Raw SVD vs TF-IDF SVD (top-5 neighbors, d={d})")
+    print('-'*50)
 
-# Load raw SVD embeddings at best d
-raw_svd_path = f'{svd_output_dir}/svd_embeddings_d{best_d}.npy'
-W_raw = np.load(raw_svd_path)
-print(f"Loaded raw SVD embeddings from {raw_svd_path}")
+    raw_svd_path = f'{svd_output_dir}/svd_embeddings_d{d}.npy'
+    W_raw = np.load(raw_svd_path)
 
-for word in tfidf_query_words:
-    if word not in vocab:
-        print(f"\n  '{word}' not in vocab, skipping")
-        continue
+    for word in tfidf_query_words:
+        if word not in vocab:
+            print(f"\n  '{word}' not in vocab, skipping")
+            continue
 
-    raw_neighbors = get_neighbors(W_raw, word, vocab, k=5)
-    tfidf_neighbors = get_neighbors(W_tfidf, word, vocab, k=5)
+        raw_neighbors = get_neighbors(W_raw, word, vocab, k=5)
+        tfidf_neighbors = get_neighbors(W_tfidf, word, vocab, k=5)
 
-    print(f"\n  {word}:")
-    print(f"    {'Raw SVD':<30s} {'TF-IDF SVD':<30s}")
-    print(f"    {'-'*28:<30s} {'-'*28:<30s}")
-    for i in range(5):
-        raw_str = f"{raw_neighbors[i][0]} ({raw_neighbors[i][1]:.3f})" if i < len(raw_neighbors) else "-"
-        tfidf_str = f"{tfidf_neighbors[i][0]} ({tfidf_neighbors[i][1]:.3f})" if i < len(tfidf_neighbors) else "-"
-        print(f"    {i+1}. {raw_str:<28s} {tfidf_str:<28s}")
+        print(f"\n  {word}:")
+        print(f"    {'Raw SVD':<30s} {'TF-IDF SVD':<30s}")
+        print(f"    {'-'*28:<30s} {'-'*28:<30s}")
+        for i in range(5):
+            raw_str = f"{raw_neighbors[i][0]} ({raw_neighbors[i][1]:.3f})" if i < len(raw_neighbors) else "-"
+            tfidf_str = f"{tfidf_neighbors[i][0]} ({tfidf_neighbors[i][1]:.3f})" if i < len(tfidf_neighbors) else "-"
+            print(f"    {i+1}. {raw_str:<28s} {tfidf_str:<28s}")
 
 print(f"\n{'='*50}")
 print("Done! TF-IDF SVD embeddings ready for Quality Check 2 (MLP training)")
-print(f"Embedding file: {svd_output_dir}/svd_tfidf_embeddings_d{best_d}.npy")
+print(f"Embeddings saved to {svd_output_dir}/")
 print('='*50)

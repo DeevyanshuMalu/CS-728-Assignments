@@ -2,16 +2,21 @@ ccnews: "../../updated_vocab_document_dict.json"
 conll_vocab: "./conll_data/vocab.json"
 cooc_path: "./ccnews_data/cooccurrence.npz"
 
-window_size: 3
-embedding_dimension: 300
+window_size: [3]
+# window_size: [3, 5]
+embedding_dimension: [50,100, 200, 300]
+# embedding_dimension: [100]
 x_max: 100
 alpha: 0.75
-lr: 0.5
-epochs: 75
+lr: [0.1]
+# lr: [0.05, 0.1, 0.5]
+epochs: 1
+qpath: "glove_embeddings/query/"
+ppath: "glove_embeddings/plots/"
+epath: "glove_embeddings/embeddings/"
 
 svd_dimensions: [50, 100, 200, 300]
 svd_output_dir: "./embeddings"
 query_words: ["president", "city", "computer"]
 
-best_svd_d: 100
 tfidf_query_words: ["president", "running", "London", "beautiful", "attack"]
