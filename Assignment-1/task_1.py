@@ -5,10 +5,9 @@ import numpy as np
 import os
 import yaml
 from collections import defaultdict
-from utils import preprocess, save_matrix, load_matrix
+from utils import preprocess, save_matrix, load_matrix,get_neighbors, train_glove, get_embeddings, plot_loss, plot_latency
 from tqdm import tqdm
 from collections import Counter
-from glove_training import train_glove, get_embeddings, plot_loss, plot_latency
 
 # Loading parameters
 yaml_file = "specifications.yaml"
@@ -127,3 +126,10 @@ for w in window_size:
                     else:
                         f.write(f"{q}: Not found in vocab\n")
     plot_latency(avg_latency, embedding_dimension, lr[0], save_path=ppath+f'latency_plot_{w}.png')
+
+# Loading the best embeddings
+chosen_embeddings = np.load(epath+f"glove_embeddings_100_3_0.1.npy")
+with open("glove_embeddings/query_neighbors.txt", "w", encoding="utf-8") as f:
+    for w in query_words:
+        neighbors = get_neighbors(chosen_embeddings, w, conll_vocab, k=5)
+        f.write(f"{w}: {neighbors}\n")

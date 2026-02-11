@@ -1,0 +1,3 @@
+president: [('Gordon', np.float32(0.3717041)), ('Winner', np.float32(0.34600723)), ('exploit', np.float32(0.34002614)), ('competing', np.float32(0.33166113)), ('7.40', np.float32(0.3311686))]
+city: [('Yigang', np.float32(0.36278412)), ('Professional', np.float32(0.3606094)), ('Tomasson', np.float32(0.35808545)), ('Krishnamoorthy', np.float32(0.35306752)), ('Bunol', np.float32(0.3498932))]
+computer: [('Fulgencio', np.float32(0.40770856)), ('Frazier', np.float32(0.39690122)), ('Longyearbyen', np.float32(0.35391173)), ('secs', np.float32(0.35209998)), ('hitting', np.float32(0.34708464))]
