@@ -257,7 +257,7 @@ if __name__ == "__main__":
         embeddings = torch.from_numpy(embeddings).to(device)
         assert args.embed_dim == embeddings.shape[1]
     elif args.embed_type == "glove":
-        embeddings = np.load(f"glove_embeddings_{args.embed_dim}_3_0.5.npy")
+        embeddings = np.load(f"glove_embeddings/embeddings/glove_embeddings_{args.embed_dim}_3_0.1.npy")
         embeddings = normalize(embeddings, axis=1)
         embeddings = torch.from_numpy(embeddings).to(device)
         assert args.embed_dim == embeddings.shape[1]
