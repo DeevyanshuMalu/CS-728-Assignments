@@ -16,7 +16,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 
-# Load data
 with open("conll_data/vocab.json", "r") as f:
     vocab_dict = json.load(f)
 
@@ -48,8 +47,7 @@ class NERMLP(nn.Module):
         )
 
     def forward(self, x):
-        # x shape: (total_tokens_in_batch)
-        embeds = self.embedding(x)  # (total_tokens_in_batch, embedding_dim)
+        embeds = self.embedding(x)
         logits = self.mlp(embeds)
         return logits
 
@@ -67,7 +65,6 @@ def train(args, embeddings):
     global vocab_dict
     vocab_dict, embeddings = prepare_embeddings_with_unk(vocab_dict, embeddings)
 
-    # Load datasets
     train_dataset = NERDataset("conll_data/train.jsonl", vocab_dict, label_dict)
     train_loader = DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn
@@ -78,7 +75,6 @@ def train(args, embeddings):
         val_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn
     )
 
-    # Initialize model
     model = NERMLP(
         len(vocab_dict),
         args.embed_dim,
@@ -94,7 +90,6 @@ def train(args, embeddings):
     val_losses = []
 
     for epoch in range(args.epochs):
-        # Training Phase
         model.train()
         total_train_loss = 0
         for i, (tokens, tags) in enumerate(train_loader):
@@ -114,7 +109,6 @@ def train(args, embeddings):
         avg_train_loss = total_train_loss / len(train_loader)
         train_losses.append(avg_train_loss)
 
-        # Validation Phase
         model.eval()
         total_val_loss = 0
         with torch.no_grad():
@@ -131,12 +125,10 @@ def train(args, embeddings):
             f"Epoch {epoch+1} completed. Avg Train Loss: {avg_train_loss:.4f}, Avg Val Loss: {avg_val_loss:.4f}"
         )
 
-    # Save model
     model_path = get_model_path(args)
     torch.save(model.state_dict(), model_path)
     print(f"Model saved to {model_path}")
 
-    # Plot and save losses
     plt.figure(figsize=(10, 6))
     plt.plot(range(1, args.epochs + 1), train_losses, label="Train Loss")
     plt.plot(range(1, args.epochs + 1), val_losses, label="Val Loss")
@@ -153,18 +145,15 @@ def train(args, embeddings):
 
 
 def test(args):
-    # Make sure vocab has <UNK> if it was added during training
     global vocab_dict
     if "<UNK>" not in vocab_dict:
         vocab_dict["<UNK>"] = len(vocab_dict)
 
-    # Load dataset
     test_dataset = NERDataset("conll_data/test.jsonl", vocab_dict, label_dict)
     test_loader = DataLoader(
         test_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn
     )
 
-    # Initialize model
     model = NERMLP(len(vocab_dict), args.embed_dim, args.hidden_dim, num_classes).to(
         device
     )
@@ -188,7 +177,6 @@ def test(args):
             all_preds.extend(predicted.cpu().tolist())
             all_tags.extend(tags.cpu().tolist())
 
-    # Get label names for report
     target_names = [None] * len(label_dict)
     for name, idx in label_dict.items():
         target_names[idx] = name
@@ -211,7 +199,6 @@ def test(args):
     print("\nPerformance Evaluation (excluding 'O'):")
     print(report2)
 
-    # Save reports to file
     report_path = model_path.replace(".pth", ".txt")
     with open(report_path, "w") as f:
         f.write("Performance Evaluation:\n")
@@ -262,7 +249,9 @@ if __name__ == "__main__":
         embeddings = torch.from_numpy(embeddings).to(device)
         assert args.embed_dim == embeddings.shape[1]
     elif args.embed_type == "glove":
-        embeddings = np.load(f"glove_embeddings/embeddings/glove_embeddings_{args.embed_dim}_3_0.1.npy")
+        embeddings = np.load(
+            f"glove_embeddings/embeddings/glove_embeddings_{args.embed_dim}_3_0.1.npy"
+        )
         embeddings = normalize(embeddings, axis=1)
         embeddings = torch.from_numpy(embeddings).to(device)
         assert args.embed_dim == embeddings.shape[1]
