@@ -65,12 +65,8 @@ def test(args):
     y_pred = crf.predict(X_test)
 
     labels = list(crf.classes_)
-    # Remove '0' (O) if you want to see performance on named entities specifically,
-    # but usually we show all.
 
     print("Performance Evaluation:")
-    # We use flatten to get a flat list of labels for standard classification report
-    # or use sklearn_crfsuite.metrics.flat_classification_report
     report = metrics.flat_classification_report(y_test, y_pred, labels=labels, digits=3)
     print(report)
 
@@ -81,7 +77,6 @@ def test(args):
     )
     print(report_no_o)
 
-    # Save reports to file
     report_path = args.model_path.replace(".joblib", ".txt")
     with open(report_path, "w") as f:
         f.write("Performance Evaluation:\n")
