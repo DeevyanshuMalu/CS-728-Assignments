@@ -1,9 +1,10 @@
-
 import numpy as np
 import torch
 
+
 class TempOrderTask:
     """Temporal Order task (2 bits -> 4 classes), lastSoftmax."""
+
     def __init__(self, rng: np.random.RandomState):
         self.rng = rng
         self.nin = 6
@@ -27,8 +28,10 @@ class TempOrderTask:
         targ[np.arange(batchsize), targ_vals] = 1.0
         return data, targ
 
+
 class TempOrder3bitTask:
     """Temporal Order 3-bit task (3 bits -> 8 classes), lastSoftmax."""
+
     def __init__(self, rng: np.random.RandomState):
         self.rng = rng
         self.nin = 6
@@ -55,8 +58,10 @@ class TempOrder3bitTask:
         targ[np.arange(batchsize), targ_vals] = 1.0
         return data, targ
 
+
 class AddTask:
     """Adding task (two marked positions); lastLinear regression; target is mean of two values."""
+
     def __init__(self, rng: np.random.RandomState):
         self.rng = rng
         self.nin = 2
@@ -72,12 +77,16 @@ class AddTask:
         data[:, :, 0] = 0.0
         data[p0, np.arange(batchsize), np.zeros((batchsize,), dtype=np.int32)] = 1.0
         data[p1, np.arange(batchsize), np.zeros((batchsize,), dtype=np.int32)] = 1.0
-        targs = (data[p0, np.arange(batchsize), np.ones((batchsize,), dtype=np.int32)] +
-                 data[p1, np.arange(batchsize), np.ones((batchsize,), dtype=np.int32)]) / 2.0
+        targs = (
+            data[p0, np.arange(batchsize), np.ones((batchsize,), dtype=np.int32)]
+            + data[p1, np.arange(batchsize), np.ones((batchsize,), dtype=np.int32)]
+        ) / 2.0
         return data, targs.reshape((-1, 1)).astype(np.float32)
+
 
 class MulTask:
     """Multiplication task (two marked positions); lastLinear regression; target is product of two values."""
+
     def __init__(self, rng: np.random.RandomState):
         self.rng = rng
         self.nin = 2
@@ -93,12 +102,16 @@ class MulTask:
         data[:, :, 0] = 0.0
         data[p0, np.arange(batchsize), np.zeros((batchsize,), dtype=np.int32)] = 1.0
         data[p1, np.arange(batchsize), np.zeros((batchsize,), dtype=np.int32)] = 1.0
-        targs = (data[p0, np.arange(batchsize), np.ones((batchsize,), dtype=np.int32)] *
-                 data[p1, np.arange(batchsize), np.ones((batchsize,), dtype=np.int32)])
+        targs = (
+            data[p0, np.arange(batchsize), np.ones((batchsize,), dtype=np.int32)]
+            * data[p1, np.arange(batchsize), np.ones((batchsize,), dtype=np.int32)]
+        )
         return data, targs.reshape((-1, 1)).astype(np.float32)
+
 
 class PermTask:
     """Permutation task; lastSoftmax over 100 classes."""
+
     def __init__(self, rng: np.random.RandomState):
         self.rng = rng
         self.nin = 100
@@ -110,22 +123,34 @@ class PermTask:
         randvals = self.rng.randint(98, size=(length + 1, batchsize)) + 2
         val = self.rng.randint(2, size=(batchsize,))
         randvals[np.zeros((batchsize,), dtype=np.int32), np.arange(batchsize)] = val
-        randvals[np.ones((batchsize,), dtype=np.int32) * length, np.arange(batchsize)] = val
+        randvals[
+            np.ones((batchsize,), dtype=np.int32) * length, np.arange(batchsize)
+        ] = val
         _targ = randvals[1:]
         _inp = randvals[:-1]
         inp = np.zeros((length, batchsize, 100), dtype=np.float32)
         targ = np.zeros((1, batchsize, 100), dtype=np.float32)
-        inp.reshape((length * batchsize, 100))[np.arange(length * batchsize), _inp.flatten()] = 1.0
+        inp.reshape((length * batchsize, 100))[
+            np.arange(length * batchsize), _inp.flatten()
+        ] = 1.0
         targ.reshape((batchsize, 100))[np.arange(batchsize), _targ[-1].flatten()] = 1.0
         return inp, targ.reshape((batchsize, 100)).astype(np.float32)
 
+
 class MemTask:
     """Memorization task; per-timestep softmax; report='all' (any timestep wrong counts as error)."""
-    def __init__(self, rng: np.random.RandomState, n_values: int = 5, n_pos: int = 10, generate_all: bool = False):
+
+    def __init__(
+        self,
+        rng: np.random.RandomState,
+        n_values: int = 5,
+        n_pos: int = 10,
+        generate_all: bool = False,
+    ):
         self.rng = rng
         self.n_values = n_values
         self.n_pos = n_pos
-        self.dim = (n_values ** n_pos)
+        self.dim = n_values**n_pos
         self.generate_all = generate_all
 
         if generate_all:
@@ -145,27 +170,35 @@ class MemTask:
         if self.generate_all:
             batchsize = self.dim
 
-        input_data = np.zeros((length + 2 * self.n_pos, batchsize, self.n_values + 2), dtype=np.float32)
-        targ_data = np.zeros((length + 2 * self.n_pos, batchsize, self.n_values + 1), dtype=np.float32)
+        input_data = np.zeros(
+            (length + 2 * self.n_pos, batchsize, self.n_values + 2), dtype=np.float32
+        )
+        targ_data = np.zeros(
+            (length + 2 * self.n_pos, batchsize, self.n_values + 1), dtype=np.float32
+        )
 
         # Default target: "blank" class (last index)
-        targ_data[:-self.n_pos, :, -1] = 1.0
+        targ_data[: -self.n_pos, :, -1] = 1.0
 
         # Input markers
-        input_data[self.n_pos:, :, -2] = 1.0
+        input_data[self.n_pos :, :, -2] = 1.0
         input_data[length + self.n_pos, :, -2] = 0.0
         input_data[length + self.n_pos, :, -1] = 1.0
 
         if not self.generate_all:
-            self.data = np.zeros((self.n_pos, batchsize, self.n_values + 2), dtype=np.float32)
+            self.data = np.zeros(
+                (self.n_pos, batchsize, self.n_values + 2), dtype=np.float32
+            )
             for val in range(batchsize):
                 tmp_val = self.rng.randint(self.dim)
                 for k in range(self.n_pos):
                     self.data[k, val, tmp_val % self.n_values] = 1.0
                     tmp_val = tmp_val // self.n_values
 
-        input_data[:self.n_pos, :, :] = self.data
-        targ_data[-self.n_pos:, :, :] = self.data[:, :, :-1]  # predict the stored symbols
+        input_data[: self.n_pos, :, :] = self.data
+        targ_data[-self.n_pos :, :, :] = self.data[
+            :, :, :-1
+        ]  # predict the stored symbols
 
         flat_targ = targ_data.reshape(((length + 2 * self.n_pos) * batchsize, -1))
         return input_data, flat_targ.astype(np.float32)
@@ -180,6 +213,7 @@ TASKS = {
     "mem": MemTask,
 }
 
+
 def make_task(name: str, rng: np.random.RandomState, **kwargs):
     if name not in TASKS:
         raise ValueError(f"Unknown task {name}. Choose from {list(TASKS.keys())}")
@@ -188,6 +222,6 @@ def make_task(name: str, rng: np.random.RandomState, **kwargs):
         return cls(rng, **kwargs)
     return cls(rng)
 
+
 def to_torch(x_np: np.ndarray, device: str):
     return torch.from_numpy(x_np).to(device=device)
-

@@ -1,4 +1,3 @@
-
 import argparse
 import time
 import os, sys
@@ -15,13 +14,13 @@ from model import make_model
 # DO THIS
 def _sigmoid_sat_dist(v: torch.Tensor) -> torch.Tensor:
     # v in [0,1]
-    pass
+    return torch.minimum(v, 1 - v)
 
 
 # DO THIS
 def _tanh_sat_dist(v: torch.Tensor) -> torch.Tensor:
     # v in [-1,1]
-    pass
+    return 1 - v.abs()
 
 
 def _hidden_sat_time(model, h: torch.Tensor) -> torch.Tensor:
@@ -36,6 +35,7 @@ def _hidden_sat_time(model, h: torch.Tensor) -> torch.Tensor:
     else:
         d = _tanh_sat_dist(h)
     return d.mean(dim=(1, 2))
+
 
 def compute_loss_and_error(task, model, x, y_onehot, return_extras: bool = False):
     """
@@ -95,7 +95,10 @@ def compute_loss_and_error(task, model, x, y_onehot, return_extras: bool = False
 
     raise ValueError(f"Unknown classifType={classif}")
 
-def omega_regularizer_and_gradW_hh(model, loss: torch.Tensor, h: torch.Tensor, bound: float):
+
+def omega_regularizer_and_gradW_hh(
+    model, loss: torch.Tensor, h: torch.Tensor, bound: float
+):
     """
     DO NOT TOUCH. UNUSED UNLESS EXTRA CREDIT.
     Implements the Omega regularizer from the original Theano code and returns:
@@ -113,28 +116,34 @@ def omega_regularizer_and_gradW_hh(model, loss: torch.Tensor, h: torch.Tensor, b
 
     Tm1, B, H = tmp.shape
     tmp2 = (tmp.reshape(Tm1 * B, H) @ model.W_hh.t()).reshape(Tm1, B, H)
-    tmp_x = (tmp2 ** 2).sum(dim=2)  # (T-1,B)
-    tmp_y = (d ** 2).sum(dim=2)     # (T-1,B)
+    tmp_x = (tmp2**2).sum(dim=2)  # (T-1,B)
+    tmp_y = (d**2).sum(dim=2)  # (T-1,B)
 
-    cond = (tmp_y >= bound).float()             # (T-1,B)
-    n_elems = cond.mean(dim=1)                  # (T-1,)
+    cond = (tmp_y >= bound).float()  # (T-1,B)
+    n_elems = cond.mean(dim=1)  # (T-1,)
     # ratio; when tmp_y is tiny, set ratio=1 so contribution is 0
     ratio = tmp_x / (tmp_y + 1e-30)
     ratio = torch.where(cond > 0.0, ratio, torch.ones_like(ratio))
-    reg = (ratio - 1.0) ** 2                    # (T-1,B)
+    reg = (ratio - 1.0) ** 2  # (T-1,B)
 
     # Theano: tmp_reg = tmp_reg.mean(1).sum()/n_elems.sum()
-    reg_time_mean = reg.mean(dim=1)             # (T-1,)
+    reg_time_mean = reg.mean(dim=1)  # (T-1,)
     omega = reg_time_mean.sum() / (n_elems.sum() + 1e-30)
 
-    steps_in_past = n_elems.mean()  # matches theano's stored tnelems (mean over time of mean mask)
+    steps_in_past = (
+        n_elems.mean()
+    )  # matches theano's stored tnelems (mean over time of mean mask)
 
-    gW_hh = torch.autograd.grad(omega, model.W_hh, retain_graph=True, create_graph=False)[0]
+    gW_hh = torch.autograd.grad(
+        omega, model.W_hh, retain_graph=True, create_graph=False
+    )[0]
     return omega.detach(), gW_hh.detach(), steps_in_past.detach()
 
 
 # DO THIS
-def grad_time_profile(task, model, x: torch.Tensor, y_onehot: torch.Tensor, collect_extras: bool = False):
+def grad_time_profile(
+    task, model, x: torch.Tensor, y_onehot: torch.Tensor, collect_extras: bool = False
+):
     """
     Compute gradient-through-time profile on a fixed diagnostic batch.
     Returns: loss (scalar), err (scalar), g_t (T,), a_t (T,), sat_t (T,), z_sat_t (T,|None), r_sat_t (T,|None)
@@ -147,6 +156,26 @@ def grad_time_profile(task, model, x: torch.Tensor, y_onehot: torch.Tensor, coll
     # Then sat_t using _hidden_sat_time.
     # Then if extras was passed in and is a dict, and the model is GRU,
     # also compute z_sat_t and r_sat_t using _sigmoid_sat_dist on the gate pre-activations.
+
+    model.zero_grad()
+
+    loss, err, _, h, extras = compute_loss_and_error(
+        task, model, x, y_onehot, collect_extras
+    )
+
+    a_t_all = model.act_deriv_from_h(h)
+    a_t = a_t_all.mean(dim=(1, 2))
+
+    g_t_all = torch.autograd.grad(loss, h)[0]
+    g_t = g_t_all.norm(dim=2).mean(dim=1)
+
+    sat_t = _hidden_sat_time(model, h)
+
+    z_sat_t = None
+    r_sat_t = None
+    if extras is not None:
+        z_sat_t = _sigmoid_sat_dist(extras["z"])
+        r_sat_t = _sigmoid_sat_dist(extras["r"])
 
     return (
         loss.detach(),
@@ -161,7 +190,12 @@ def grad_time_profile(task, model, x: torch.Tensor, y_onehot: torch.Tensor, coll
 
 # DO THIS
 def global_grad_norm(params):
-    pass
+    total_norm = 0.0
+    for p in params:
+        if p.grad is not None:
+            total_norm += p.grad.norm() ** 2
+    return total_norm**0.5
+
 
 def clip_rescale(params, cutoff: float):
     # rescale grads if global norm > cutoff
@@ -180,15 +214,37 @@ def clip_rescale(params, cutoff: float):
     norm_post = global_grad_norm(params)
     return norm, False, clipped, norm_post
 
+
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--task", type=str, default="mem", choices=["torder","torder3","add","mul","mem","perm"])
-    p.add_argument("--model", type=str, default="rnn", choices=["rnn","gru"], help="Recurrent cell type.")
-    p.add_argument("--init", type=str, default="basic_tanh", choices=["sigmoid","basic_tanh","smart_tanh","test"])
+    p.add_argument(
+        "--task",
+        type=str,
+        default="mem",
+        choices=["torder", "torder3", "add", "mul", "mem", "perm"],
+    )
+    p.add_argument(
+        "--model",
+        type=str,
+        default="rnn",
+        choices=["rnn", "gru"],
+        help="Recurrent cell type.",
+    )
+    p.add_argument(
+        "--init",
+        type=str,
+        default="basic_tanh",
+        choices=["sigmoid", "basic_tanh", "smart_tanh", "test"],
+    )
     p.add_argument("--nhid", type=int, default=50)
     p.add_argument("--seed", type=int, default=52)
 
-    p.add_argument("--alpha", type=float, default=2.0, help="Omega regularizer strength (applied to W_hh only).")
+    p.add_argument(
+        "--alpha",
+        type=float,
+        default=2.0,
+        help="Omega regularizer strength (applied to W_hh only).",
+    )
     p.add_argument("--lr", type=float, default=0.01)
 
     p.add_argument("--min_length", type=int, default=50)
@@ -201,18 +257,53 @@ def parse_args():
     p.add_argument("--checkFreq", type=int, default=20)
 
     # Diagnostics: gradient-through-time and saturation summaries.
-    p.add_argument("--collectDiags", action="store_true", help="Store grad/saturation time profiles and print histogram summaries at check points.")
-    p.add_argument("--diagBins", type=int, default=50, help="Number of histogram bins for diagnostic summaries.")
-    p.add_argument("--satThresh", type=float, default=0.05, help="Threshold on distance-to-saturation used for 'fraction saturated'.")
-    p.add_argument("--diagGates", action="store_true", help="Also collect GRU gate saturation traces (only meaningful with --model gru).")
+    p.add_argument(
+        "--collectDiags",
+        action="store_true",
+        help="Store grad/saturation time profiles and print histogram summaries at check points.",
+    )
+    p.add_argument(
+        "--diagBins",
+        type=int,
+        default=50,
+        help="Number of histogram bins for diagnostic summaries.",
+    )
+    p.add_argument(
+        "--satThresh",
+        type=float,
+        default=0.05,
+        help="Threshold on distance-to-saturation used for 'fraction saturated'.",
+    )
+    p.add_argument(
+        "--diagGates",
+        action="store_true",
+        help="Also collect GRU gate saturation traces (only meaningful with --model gru).",
+    )
     p.add_argument("--bound", type=float, default=1e-20)
-    p.add_argument("--err_abs", type=float, default=0.2, help="For lastLinear tasks: report valid error as |yhat-y|>err_abs (default 0.2, matches original squared threshold 0.04).")
-    p.add_argument("--valid_seed", type=int, default=12345, help="Seed offset used to freeze the validation set.")
+    p.add_argument(
+        "--err_abs",
+        type=float,
+        default=0.2,
+        help="For lastLinear tasks: report valid error as |yhat-y|>err_abs (default 0.2, matches original squared threshold 0.04).",
+    )
+    p.add_argument(
+        "--valid_seed",
+        type=int,
+        default=12345,
+        help="Seed offset used to freeze the validation set.",
+    )
 
-    p.add_argument("--clipstyle", type=str, default="rescale", choices=["rescale","nothing"])
+    p.add_argument(
+        "--clipstyle", type=str, default="rescale", choices=["rescale", "nothing"]
+    )
     p.add_argument("--cutoff", type=float, default=1.0)
 
-    p.add_argument("--maxiters", type=int, default=int(20000), help="Training iterations (batches).")
+    p.add_argument(
+        "--maxiters",
+        type=int,
+        default=int(20000),
+        help="Training iterations (batches).",
+    )
     p.add_argument("--saveFreq", type=float, default=5.0, help="Save every N minutes.")
     p.add_argument("--name", type=str, default="test_torch")
 
@@ -221,7 +312,7 @@ def parse_args():
     p.add_argument("--mempos", type=int, default=10)
     p.add_argument("--memall", action="store_true")
 
-    p.add_argument("--device", type=str, default="cpu", choices=["cpu","cuda"])
+    p.add_argument("--device", type=str, default="cpu", choices=["cpu", "cuda"])
     return p.parse_args()
 
 
@@ -241,14 +332,21 @@ def _effective_max_seq_len(args, task_obj) -> int:
     # torder/torder3/perm: no expansion
     return base
 
+
 def main():
     args = parse_args()
-    device = args.device if (args.device == "cpu" or torch.cuda.is_available()) else "cpu"
+    device = (
+        args.device if (args.device == "cpu" or torch.cuda.is_available()) else "cpu"
+    )
     rng = np.random.RandomState(args.seed)
 
     task_kwargs = {}
     if args.task == "mem":
-        task_kwargs = {"n_values": args.memvalues, "n_pos": args.mempos, "generate_all": args.memall}
+        task_kwargs = {
+            "n_values": args.memvalues,
+            "n_pos": args.mempos,
+            "generate_all": args.memall,
+        }
     task = make_task(args.task, rng, **task_kwargs)
     # For regression tasks (add/mul): define absolute-error threshold for "valid error" reporting
     task.err_abs = float(args.err_abs)
@@ -276,14 +374,15 @@ def main():
     valid_batches = []  # list of (x: (T,B,nin), y: (..)) torch tensors on device
     for _ in range(n_eval_chunks):
         if args.max_length > args.min_length:
-            vlen = args.min_length + rng_valid.randint(args.max_length - args.min_length)
+            vlen = args.min_length + rng_valid.randint(
+                args.max_length - args.min_length
+            )
         else:
             vlen = args.min_length
         vx_np, vy_np = task_valid.generate(args.cbs, vlen)
         vx = to_torch(vx_np, device).float()
         vy = to_torch(vy_np, device).float()
         valid_batches.append((vx, vy))
-
 
     # ---- Fixed diagnostic batch (for gradient-through-time profiles) ----
     rng_diag = np.random.RandomState(args.seed + args.valid_seed + 999)
@@ -304,26 +403,30 @@ def main():
     store_space = max(1, args.maxiters // args.checkFreq)
     store_train = np.full((args.maxiters,), -1.0, dtype=np.float32)
     store_valid = np.full((store_space,), -1.0, dtype=np.float32)
-    store_norm  = np.full((args.maxiters,), -1.0, dtype=np.float32)
-    store_rho   = np.full((store_space,), -1.0, dtype=np.float32)
-    store_reg   = np.full((args.maxiters,), -1.0, dtype=np.float32)
+    store_norm = np.full((args.maxiters,), -1.0, dtype=np.float32)
+    store_rho = np.full((store_space,), -1.0, dtype=np.float32)
+    store_reg = np.full((args.maxiters,), -1.0, dtype=np.float32)
     store_steps = np.full((args.maxiters,), -1.0, dtype=np.float32)
     # Diagnostics at checkpoints (NaN-padded). Note: some tasks expand the
     # provided length (e.g., memorization adds 2*mempos). We pre-allocate to
     # an upper bound to avoid shape/broadcast errors.
     diag_storage_len = _effective_max_seq_len(args, task_diag)
     store_grad_time = np.full((store_space, diag_storage_len), np.nan, dtype=np.float32)
-    store_act_time  = np.full((store_space, diag_storage_len), np.nan, dtype=np.float32)
-    store_sat_time  = np.full((store_space, diag_storage_len), np.nan, dtype=np.float32)
-    store_gate_z_sat_time = np.full((store_space, diag_storage_len), np.nan, dtype=np.float32)
-    store_gate_r_sat_time = np.full((store_space, diag_storage_len), np.nan, dtype=np.float32)
+    store_act_time = np.full((store_space, diag_storage_len), np.nan, dtype=np.float32)
+    store_sat_time = np.full((store_space, diag_storage_len), np.nan, dtype=np.float32)
+    store_gate_z_sat_time = np.full(
+        (store_space, diag_storage_len), np.nan, dtype=np.float32
+    )
+    store_gate_r_sat_time = np.full(
+        (store_space, diag_storage_len), np.nan, dtype=np.float32
+    )
     store_diag_loss = np.full((store_space,), -1.0, dtype=np.float32)
-    store_diag_err  = np.full((store_space,), -1.0, dtype=np.float32)
+    store_diag_err = np.full((store_space,), -1.0, dtype=np.float32)
 
     avg_cost = 0.0
     avg_norm = 0.0
     avg_norm_post = 0.0
-    avg_reg  = 0.0
+    avg_reg = 0.0
     avg_steps = 0.0
     avg_len = 0.0
 
@@ -354,7 +457,9 @@ def main():
         steps_in_past = torch.tensor(float("nan"), device=device)
         supports_omega = bool(getattr(model, "supports_omega", False))
         if args.alpha > 0 and supports_omega:
-            omega, gW_hh_reg, steps_in_past = omega_regularizer_and_gradW_hh(model, loss, h, args.bound)
+            omega, gW_hh_reg, steps_in_past = omega_regularizer_and_gradW_hh(
+                model, loss, h, args.bound
+            )
 
         # main backward
         loss.backward()
@@ -364,7 +469,9 @@ def main():
             if getattr(model, "W_hh", None) is not None:
                 if model.W_hh.grad is None:
                     model.W_hh.grad = torch.zeros_like(model.W_hh)
-                model.W_hh.grad = model.W_hh.grad + float(args.alpha) * gW_hh_reg.to(device=device)
+                model.W_hh.grad = model.W_hh.grad + float(args.alpha) * gW_hh_reg.to(
+                    device=device
+                )
 
         # Ensure every parameter has a grad tensor (some parameters may be unused
         # depending on task/model).
@@ -374,7 +481,9 @@ def main():
 
         # clipping
         if args.clipstyle == "rescale":
-            norm, bad, clipped, norm_post = clip_rescale(list(model.parameters()), args.cutoff)
+            norm, bad, clipped, norm_post = clip_rescale(
+                list(model.parameters()), args.cutoff
+            )
             if bad:
                 # If clipping detected NaNs/Infs, zero out grads and apply a small
                 # stabilizing update on the main recurrent weight (when available).
@@ -387,7 +496,10 @@ def main():
                         W = Wrec()
                         if isinstance(W, torch.Tensor) and W.grad is not None:
                             W.grad = 0.02 * W.detach()
-                    elif getattr(model, "W_hh", None) is not None and model.W_hh.grad is not None:
+                    elif (
+                        getattr(model, "W_hh", None) is not None
+                        and model.W_hh.grad is not None
+                    ):
                         model.W_hh.grad = 0.02 * model.W_hh.detach()
                 norm = global_grad_norm(list(model.parameters()))
         else:
@@ -413,9 +525,9 @@ def main():
             avg_cost /= float(args.checkFreq)
             avg_norm /= float(args.checkFreq)
             avg_norm_post /= float(args.checkFreq)
-            avg_reg  /= float(args.checkFreq)
-            avg_steps/= float(args.checkFreq)
-            avg_len  /= float(args.checkFreq)
+            avg_reg /= float(args.checkFreq)
+            avg_steps /= float(args.checkFreq)
+            avg_len /= float(args.checkFreq)
 
             valid_cost = 0.0
             valid_err = 0.0
@@ -428,17 +540,31 @@ def main():
             n_eval_chunks = len(valid_batches)
             model.eval()
             with torch.no_grad():
-                for (vx, vy) in valid_batches:
-                    vloss, verr, vout, _, _ = compute_loss_and_error(task_valid, model, vx, vy)
+                for vx, vy in valid_batches:
+                    vloss, verr, vout, _, _ = compute_loss_and_error(
+                        task_valid, model, vx, vy
+                    )
                     valid_cost += float(vloss.detach().cpu())
                     valid_err += float(verr.detach().cpu())
                     if task_valid.classifType == "lastLinear":
                         abs_err = (vy - vout).abs()
                         valid_mae += float(abs_err.mean().detach().cpu())
-                        valid_maxae = max(valid_maxae, float(abs_err.max().detach().cpu()))
-                        valid_err_005 += float((abs_err > 0.05).float().mean().detach().cpu())
-                        valid_err_010 += float((abs_err > 0.10).float().mean().detach().cpu())
-                        valid_err_abs += float((abs_err > float(task_valid.err_abs)).float().mean().detach().cpu())
+                        valid_maxae = max(
+                            valid_maxae, float(abs_err.max().detach().cpu())
+                        )
+                        valid_err_005 += float(
+                            (abs_err > 0.05).float().mean().detach().cpu()
+                        )
+                        valid_err_010 += float(
+                            (abs_err > 0.10).float().mean().detach().cpu()
+                        )
+                        valid_err_abs += float(
+                            (abs_err > float(task_valid.err_abs))
+                            .float()
+                            .mean()
+                            .detach()
+                            .cpu()
+                        )
             model.train()
 
             valid_cost /= float(n_eval_chunks)
@@ -457,7 +583,6 @@ def main():
             Whh_np = Wrec.detach().cpu().numpy()
             rho = float(np.max(np.abs(np.linalg.eigvals(Whh_np))))
 
-            
             pos = n // args.checkFreq
             if pos < store_space:
                 store_valid[pos] = float(valid_err)
@@ -474,15 +599,25 @@ def main():
                     Tdiag = int(g_t.shape[0])
                     Tstore = min(Tdiag, diag_storage_len)
 
-                    store_grad_time[pos, :Tstore] = g_t[:Tstore].detach().cpu().numpy().astype(np.float32)
-                    store_act_time[pos,  :Tstore] = a_t[:Tstore].detach().cpu().numpy().astype(np.float32)
-                    store_sat_time[pos,  :Tstore] = sat_t[:Tstore].detach().cpu().numpy().astype(np.float32)
+                    store_grad_time[pos, :Tstore] = (
+                        g_t[:Tstore].detach().cpu().numpy().astype(np.float32)
+                    )
+                    store_act_time[pos, :Tstore] = (
+                        a_t[:Tstore].detach().cpu().numpy().astype(np.float32)
+                    )
+                    store_sat_time[pos, :Tstore] = (
+                        sat_t[:Tstore].detach().cpu().numpy().astype(np.float32)
+                    )
                     if zsat_t is not None:
-                        store_gate_z_sat_time[pos, :Tstore] = zsat_t[:Tstore].detach().cpu().numpy().astype(np.float32)
+                        store_gate_z_sat_time[pos, :Tstore] = (
+                            zsat_t[:Tstore].detach().cpu().numpy().astype(np.float32)
+                        )
                     if rsat_t is not None:
-                        store_gate_r_sat_time[pos, :Tstore] = rsat_t[:Tstore].detach().cpu().numpy().astype(np.float32)
+                        store_gate_r_sat_time[pos, :Tstore] = (
+                            rsat_t[:Tstore].detach().cpu().numpy().astype(np.float32)
+                        )
                     store_diag_loss[pos] = float(dloss.detach().cpu())
-                    store_diag_err[pos]  = float(derr.detach().cpu())
+                    store_diag_err[pos] = float(derr.detach().cpu())
 
                     # Simple histogram summaries for quick eyeballing
                     eps = 1e-12
@@ -490,7 +625,9 @@ def main():
                     s_np = sat_t[:Tstore].detach().cpu().numpy()
                     g_l = np.log10(g_np + eps)
                     g_hist, g_edges = np.histogram(g_l, bins=args.diagBins)
-                    s_hist, s_edges = np.histogram(s_np, bins=args.diagBins, range=(0.0, 1.0))
+                    s_hist, s_edges = np.histogram(
+                        s_np, bins=args.diagBins, range=(0.0, 1.0)
+                    )
                     sat_frac = float((s_np < args.satThresh).mean()) * 100.0
                     print(
                         f"  [diag] log10|dL/dh_t| hist bins={args.diagBins} range=({g_edges[0]:.2f},{g_edges[-1]:.2f}) "
@@ -503,8 +640,12 @@ def main():
                     if zsat_t is not None and rsat_t is not None:
                         z_np = zsat_t[:Tstore].detach().cpu().numpy()
                         r_np = rsat_t[:Tstore].detach().cpu().numpy()
-                        z_hist, z_edges = np.histogram(z_np, bins=args.diagBins, range=(0.0, 1.0))
-                        r_hist, r_edges = np.histogram(r_np, bins=args.diagBins, range=(0.0, 1.0))
+                        z_hist, z_edges = np.histogram(
+                            z_np, bins=args.diagBins, range=(0.0, 1.0)
+                        )
+                        r_hist, r_edges = np.histogram(
+                            r_np, bins=args.diagBins, range=(0.0, 1.0)
+                        )
                         print(
                             f"  [diag] z-gate sat-dist hist bins={args.diagBins} "
                             f"mean={z_np.mean():.3f} p10={np.quantile(z_np,0.1):.3f} p90={np.quantile(z_np,0.9):.3f}"
@@ -533,8 +674,7 @@ def main():
                 f"rho_Whh {rho:5.2f}, "
                 f"Omega {avg_reg:5.2f}, "
                 f"alpha {args.alpha:6.3f}, "
-                f"steps in the past {avg_steps:05.3f}"
-                + extra
+                f"steps in the past {avg_steps:05.3f}" + extra
             )
 
             if valid_err < best_score:
@@ -549,11 +689,22 @@ def main():
             if (time.time() - last_save) > args.saveFreq * 60.0:
                 save_npz(
                     args.name + "_state.npz",
-                    store_train, store_valid, store_norm, store_rho, store_reg, store_steps,
-                    store_grad_time, store_act_time, store_sat_time,
-                    store_gate_z_sat_time, store_gate_r_sat_time,
-                    store_diag_loss, store_diag_err,
-                    diag_len, diag_bs, args.checkFreq,
+                    store_train,
+                    store_valid,
+                    store_norm,
+                    store_rho,
+                    store_reg,
+                    store_steps,
+                    store_grad_time,
+                    store_act_time,
+                    store_sat_time,
+                    store_gate_z_sat_time,
+                    store_gate_r_sat_time,
+                    store_diag_loss,
+                    store_diag_err,
+                    diag_len,
+                    diag_bs,
+                    args.checkFreq,
                     model,
                 )
                 last_save = time.time()
@@ -563,14 +714,26 @@ def main():
 
     save_npz(
         args.name + "_final_state.npz",
-        store_train, store_valid, store_norm, store_rho, store_reg, store_steps,
-        store_grad_time, store_act_time, store_sat_time,
-        store_gate_z_sat_time, store_gate_r_sat_time,
-        store_diag_loss, store_diag_err,
-        diag_len, diag_bs, args.checkFreq,
+        store_train,
+        store_valid,
+        store_norm,
+        store_rho,
+        store_reg,
+        store_steps,
+        store_grad_time,
+        store_act_time,
+        store_sat_time,
+        store_gate_z_sat_time,
+        store_gate_r_sat_time,
+        store_diag_loss,
+        store_diag_err,
+        diag_len,
+        diag_bs,
+        args.checkFreq,
         model,
     )
     print(f"Done. solved={solved} steps={n} best_valid_error={best_score:.4f}%")
+
 
 def save_npz(
     path,
@@ -620,6 +783,7 @@ def save_npz(
                 payload[f"state__{k}"] = v.detach().cpu().numpy()
 
     np.savez(path, **payload)
+
 
 if __name__ == "__main__":
     main()

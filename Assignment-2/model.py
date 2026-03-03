@@ -1,10 +1,10 @@
-
 from __future__ import annotations
 import math
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 
 # DO THIS
 def spectral_radius(mat: np.ndarray) -> float:
@@ -15,15 +15,13 @@ def spectral_radius(mat: np.ndarray) -> float:
 
 # DO THIS
 def _tanh_saturation_distance(h: torch.Tensor) -> torch.Tensor:
-    """Distance to saturation for tanh outputs in [-1, 1].
-    """
+    """Distance to saturation for tanh outputs in [-1, 1]."""
     pass
 
 
 # DO THIS
 def _sigmoid_saturation_distance(h: torch.Tensor) -> torch.Tensor:
-    """Distance to saturation for sigmoid outputs in [0, 1].
-    """
+    """Distance to saturation for sigmoid outputs in [0, 1]."""
     pass
 
 
@@ -36,6 +34,7 @@ class VanillaRNN(nn.Module):
       - softmax: softmax at every step
       - lastLinear: linear regression on last hidden
     """
+
     def __init__(
         self,
         nin: int,
@@ -91,7 +90,9 @@ class VanillaRNN(nn.Module):
             b_hy = np.zeros((nout,), dtype=np.float32)
             self.act_name = "tanh"
         else:
-            raise ValueError(f"Unknown init={init}. Choose from sigmoid, test, basic_tanh, smart_tanh")
+            raise ValueError(
+                f"Unknown init={init}. Choose from sigmoid, test, basic_tanh, smart_tanh"
+            )
 
         # Parameters with same naming as Theano code
         self.W_uh = nn.Parameter(torch.tensor(W_uh, dtype=dtype, device=device))
@@ -143,16 +144,18 @@ class VanillaRNN(nn.Module):
         # every step and return all of them flattened into (T*B, nout).
         # Final return signature looks like `logits, h`.
 
-        logits = torch.zeros((T, B, self.nout), dtype=self.W_hy.dtype, device=self.W_hy.device)
-        h = torch.zeros((T, B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
-
-        h_prev = torch.zeros((B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
+        h_all = []
+        h_prev = torch.zeros(
+            (B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device
+        )
 
         for t in range(T):
-            h[t] = self.act(u[t] @ self.W_uh + h_prev @ self.W_hh + self.b_hh)
-            logits_t = h[t] @ self.W_hy + self.b_hy
-            logits[t] = logits_t
-            h_prev = h[t]
+            h_t = self.act(u[t] @ self.W_uh + h_prev @ self.W_hh + self.b_hh)
+            h_all.append(h_t)
+            h_prev = h_t
+
+        h = torch.stack(h_all)
+        logits = h @ self.W_hy + self.b_hy
 
         if self.classif_type == "lastSoftmax" or self.classif_type == "lastLinear":
             logits = logits[-1]
@@ -162,8 +165,6 @@ class VanillaRNN(nn.Module):
             raise RuntimeError("wrong classif_type")
 
         return logits, h
-
-        
 
     # ---- small helpers used by train.py diagnostics / saving ----
     supports_omega: bool = True
@@ -304,21 +305,32 @@ class GRUModel(nn.Module):
         # See the math in the assignment PDF for details.
         # raise ValueError(f"Unknown classif_type={self.classif_type}")
 
-        z = torch.zeros((T, B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
-        r = torch.zeros((T, B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
-        h_tilde = torch.zeros((T, B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
-        h = torch.zeros((T, B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
-        logits = torch.zeros((T, B, self.nout), dtype=self.W_hy.dtype, device=self.W_hy.device)
+        z_all = []
+        r_all = []
+        h_tilde_all = []
+        h_all = []
 
-        h_prev = torch.zeros((B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
+        h_prev = torch.zeros(
+            (B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device
+        )
 
         for t in range(T):
-            z[t] = torch.sigmoid(u[t] @ self.W_uz + h_prev @ self.W_hz + self.b_z)
-            r[t] = torch.sigmoid(u[t] @ self.W_ur + h_prev @ self.W_hr + self.b_r)
-            h_tilde[t] = torch.tanh(u[t] @ self.W_uh + (r[t] * h_prev) @ self.W_hh + self.b_h)
-            h[t] = (1 - z[t]) * h_prev + z[t] * h_tilde[t]
-            logits[t] = h[t] @ self.W_hy + self.b_y
-            h_prev = h[t]
+            z_t = torch.sigmoid(u[t] @ self.W_uz + h_prev @ self.W_hz + self.b_z)
+            r_t = torch.sigmoid(u[t] @ self.W_ur + h_prev @ self.W_hr + self.b_r)
+            h_tilde_t = torch.tanh(
+                u[t] @ self.W_uh + (r_t * h_prev) @ self.W_hh + self.b_h
+            )
+            h_t = (1 - z_t) * h_prev + z_t * h_tilde_t
+
+            z_all.append(z_t)
+            r_all.append(r_t)
+            h_tilde_all.append(h_tilde_t)
+            h_all.append(h_t)
+
+            h_prev = h_t
+
+        h = torch.stack(h_all)
+        logits = h @ self.W_hy + self.b_y
 
         if self.classif_type == "lastSoftmax" or self.classif_type == "lastLinear":
             logits = logits[-1]
@@ -328,6 +340,9 @@ class GRUModel(nn.Module):
             raise RuntimeError("wrong classif_type")
 
         if return_extras:
+            z = torch.stack(z_all)
+            r = torch.stack(r_all)
+            h_tilde = torch.stack(h_tilde_all)
             return logits, h, {"z": z, "r": r, "h_tilde": h_tilde}
         else:
             return logits, h
