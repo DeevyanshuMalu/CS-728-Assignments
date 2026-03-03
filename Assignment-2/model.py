@@ -143,6 +143,28 @@ class VanillaRNN(nn.Module):
         # every step and return all of them flattened into (T*B, nout).
         # Final return signature looks like `logits, h`.
 
+        logits = torch.zeros((T, B, self.nout), dtype=self.W_hy.dtype, device=self.W_hy.device)
+        h = torch.zeros((T, B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
+
+        h_prev = torch.zeros((B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
+
+        for t in range(T):
+            h[t] = self.act(u[t] @ self.W_uh + h_prev @ self.W_hh + self.b_hh)
+            logits_t = h[t] @ self.W_hy + self.b_hy
+            logits[t] = logits_t
+            h_prev = h[t]
+
+        if self.classif_type == "lastSoftmax" or self.classif_type == "lastLinear":
+            logits = logits[-1]
+        elif self.classif_type == "softmax":
+            logits = logits.view(-1, self.nout)
+        else:
+            raise RuntimeError("wrong classif_type")
+
+        return logits, h
+
+        
+
     # ---- small helpers used by train.py diagnostics / saving ----
     supports_omega: bool = True
 
@@ -161,7 +183,7 @@ class VanillaRNN(nn.Module):
     # DO THIS
     def recurrent_weight_for_rho(self) -> torch.Tensor:
         # This needs to return the recurrent weight matrix.
-        pass
+        return self.W_hh
 
     def numpy_state(self) -> dict:
         return {
@@ -248,7 +270,7 @@ class GRUModel(nn.Module):
     def recurrent_weight_for_rho(self) -> torch.Tensor:
         # This needs to return the recurrent weight matrix. There are multiple in
         # the case of the GRU: return the candidate one similar to the RNN case.
-        pass
+        return self.W_hh
 
     def numpy_state(self) -> dict:
         return {
@@ -280,7 +302,35 @@ class GRUModel(nn.Module):
         #   - "r": pre-activation of reset gate r
         #   - "h_tilde": pre-activation of candidate h_tilde
         # See the math in the assignment PDF for details.
-        raise ValueError(f"Unknown classif_type={self.classif_type}")
+        # raise ValueError(f"Unknown classif_type={self.classif_type}")
+
+        z = torch.zeros((T, B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
+        r = torch.zeros((T, B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
+        h_tilde = torch.zeros((T, B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
+        h = torch.zeros((T, B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
+        logits = torch.zeros((T, B, self.nout), dtype=self.W_hy.dtype, device=self.W_hy.device)
+
+        h_prev = torch.zeros((B, self.nhid), dtype=self.W_hh.dtype, device=self.W_hh.device)
+
+        for t in range(T):
+            z[t] = torch.sigmoid(u[t] @ self.W_uz + h_prev @ self.W_hz + self.b_z)
+            r[t] = torch.sigmoid(u[t] @ self.W_ur + h_prev @ self.W_hr + self.b_r)
+            h_tilde[t] = torch.tanh(u[t] @ self.W_uh + (r[t] * h_prev) @ self.W_hh + self.b_h)
+            h[t] = (1 - z[t]) * h_prev + z[t] * h_tilde[t]
+            logits[t] = h[t] @ self.W_hy + self.b_y
+            h_prev = h[t]
+
+        if self.classif_type == "lastSoftmax" or self.classif_type == "lastLinear":
+            logits = logits[-1]
+        elif self.classif_type == "softmax":
+            logits = logits.view(-1, self.nout)
+        else:
+            raise RuntimeError("wrong classif_type")
+
+        if return_extras:
+            return logits, h, {"z": z, "r": r, "h_tilde": h_tilde}
+        else:
+            return logits, h
 
 
 def make_model(
