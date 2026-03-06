@@ -267,6 +267,13 @@ class GRUModel(nn.Module):
         # hidden values remain in [-1,1]
         return _tanh_saturation_distance(h)
 
+    def act_deriv_from_h(self, h: torch.Tensor) -> torch.Tensor:
+        """
+        Derivative of activation for the candidate hidden state in GRU.
+        Matches tanh: 1 - h^2.
+        """
+        return 1.0 - h * h
+
     # DO THIS
     def recurrent_weight_for_rho(self) -> torch.Tensor:
         # This needs to return the recurrent weight matrix. There are multiple in

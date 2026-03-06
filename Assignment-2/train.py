@@ -174,8 +174,8 @@ def grad_time_profile(
     z_sat_t = None
     r_sat_t = None
     if extras is not None:
-        z_sat_t = _sigmoid_sat_dist(extras["z"])
-        r_sat_t = _sigmoid_sat_dist(extras["r"])
+        z_sat_t = _sigmoid_sat_dist(extras["z"]).mean(dim=(1, 2))
+        r_sat_t = _sigmoid_sat_dist(extras["r"]).mean(dim=(1, 2))
 
     return (
         loss.detach(),
