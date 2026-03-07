@@ -210,3 +210,4 @@ logs/
 *.joblib
 *.pt
 *.pth
+!Assignment-2/task_logs/*.log

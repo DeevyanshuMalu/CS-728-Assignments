@@ -2,7 +2,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
+task = "A1_mem_rnn_tanh_noclip_final_state"
+task = "A2_mem_rnn_tanh_clip005_final_state"
+task = "A3_mem_rnn_tanh_clip001_final_state"
 task = "A4_mem_gru_noclip_final_state"
+task = "A5_mem_gru_clip005_final_state"
+task = "B1_mul_rnn_tanh_noclip_final_state"
+task = "B2_mul_gru_noclip_final_state"
+
 z = np.load(f"{task}.npz")
 train_nll = z["train_nll"]  # (num_checkpoints,)
 grad_time = z["grad_time"]  # (num_checkpoints, Tstore), NaN padded
