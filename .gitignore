@@ -211,3 +211,4 @@ logs/
 *.pt
 *.pth
 !Assignment-2/task_logs/*.log
+!Assignment-2/22B1256_22B1029_22B0923_22B1037/task_logs/*.log
