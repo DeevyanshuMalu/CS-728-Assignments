@@ -50,13 +50,25 @@ def query_to_docs_attention_heads(attentions, query_span, doc_spans, selected_he
     raise NotImplementedError
 
 
-def get_query_span(input_ids, tokenizer):
+def get_query_span(query, putils, tokenizer):
     # TODO 3: Query span
     """
     Identify the token span corresponding to the query.
     Note: you are free to add/remove args in this function
     """
-    raise NotImplementedError
+    prompt_pre = putils.prompt_prefix + \
+                putils.all_docs_info_string + \
+                putils.prompt_seperator + \
+                putils.add_text1 + \
+                putils.prompt_seperator + \
+                "Query:"
+    prompt_pre_len = len(tokenizer(prompt_pre, add_special_tokens=False).input_ids)
+
+    query_tokens = tokenizer(" " + query, add_special_tokens=False).input_ids
+    start = prompt_pre_len
+    end = start + len(query_tokens)
+
+    return (start, end)
 
 
 parser = argparse.ArgumentParser()
@@ -84,6 +96,7 @@ if __name__ == '__main__':
         tokenizer=tokenizer,
         tools=tools,
         device=device,
+        get_query_span=get_query_span,
         max_heads=args.max_heads
     )
 
@@ -128,7 +141,7 @@ if __name__ == '__main__':
         with torch.no_grad():
             attentions = model(**inputs).attentions
 
-        query_span = get_query_span()
+        query_span = get_query_span(question, putils, tokenizer)
 
         doc_scores = query_to_docs_attention_heads(
             attentions,
