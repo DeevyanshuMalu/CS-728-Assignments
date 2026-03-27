@@ -39,6 +39,16 @@ def query_to_docs_attention(attentions, query_span, doc_spans):
     doc_scores = torch.zeros(len(doc_spans), device=attentions[0].device)
     
     # TODO 1: implement to get final query to doc attention stored in doc_scores
+    sum_at = torch.zeros(attentions[0][0][0].shape, device=attentions[0].device)
+    num_heads = 0
+    for layer_at in attentions:
+        num_heads += layer_at.shape[1]
+        sum_at += layer_at[0].sum(dim=0).cpu()
+
+    avg_at = sum_at / num_heads
+    for i, (start, end) in enumerate(doc_spans):
+        doc_scores[i] = avg_at[query_span[0]:query_span[1], start:end].sum()
+
     return doc_scores
 
 
@@ -56,15 +66,37 @@ def analyze_gold_attention(result, save_path="plot2/gold_attention_plot.png"):
         - Save the plot as an image file under folder plot2.
         - You are free to choose how to aggregate and visualize the data.
     """
-    raise NotImplementedError
+    os.makedirs("plot2", exist_ok=True)
+    pos = np.array([res["gold_position"] for res in result])
+    scores = np.array([res["gold_score"] for res in result])
+    ranks = np.array([res["gold_rank"] for res in result])
 
-def get_query_span():
+    plt.figure(figsize=(15, 6))
+    plt.scatter(pos, scores, c=ranks, cmap='viridis', alpha=0.7)
+    plt.colorbar(label='Rank')
+    plt.xlabel('Position')
+    plt.ylabel('Attention Score')
+    plt.title('Attention to Gold Tool by Position')
+    plt.savefig(save_path)
+    plt.close()
+
+def get_query_span(input_ids, tokenizer, query):
     # TODO 3: Query span
     """
     Identify the token span corresponding to the query.
     Note: you are free to add/remove args in this function
     """
-    return None
+    query_span = (None, None)
+    query_tokens = tokenizer(query, add_special_tokens=False).input_ids
+    input_ids_list = input_ids.tolist()
+
+    for i in range(len(input_ids_list) - len(query_tokens) + 1):
+        if input_ids_list[i:i+len(query_tokens)] == query_tokens:
+            query_span = (i, i + len(query_tokens))
+            break
+
+    return query_span
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=64)
@@ -146,15 +178,21 @@ if __name__ == '__main__':
                 attentions[0].shape - [1, h, N, N] : first layer's attention matrix for h heads
             '''
         
-        query_span = get_query_span() 
+        query_span = get_query_span(inputs.input_ids, tokenizer, question)
 
         doc_scores = query_to_docs_attention(attentions, query_span, item_spans)
 
         # TODO: find gold_rank- rank of gold tool in doc_scores
+        sorted_indices = torch.argsort(doc_scores, descending=True).cpu().tolist()
+        gold_rank = sorted_indices.index(gold_tool_id)+1 if gold_tool_id in sorted_indices else None
         # TODO: find gold_score - score of gold tool
-        gold_rank = None
-        gold_score = None
-        
+        gold_score = doc_scores[gold_tool_id].item() if gold_tool_id in doc_scores else None
+        top1_indices = sorted_indices[:1]
+        top5_indices = sorted_indices[:5]
+        if gold_tool_id in top1_indices:
+            recall_at_1_hits += 1
+        if gold_tool_id in top5_indices:
+            recall_at_5_hits += 1
         results.append({
             "qid": qid,
             "gold_position": gold_tool_id,
@@ -163,7 +201,7 @@ if __name__ == '__main__':
         })
 
         # TODO: calucalte recall@1, recall@5 metric and print at end of loop
-
+    print(f"recall@1: {recall_at_1_hits / len(test_queries):.4f}, recall@5: {recall_at_5_hits / len(test_queries):.4f}")
     analyze_gold_attention(results)
 
     
