@@ -16,10 +16,10 @@ def get_toolwise_attention_scores(query_span, item_spans, attentions):
             attn_query_to_tool = layer_attn[
                 0, :, query_span[0] : query_span[1], tool_span[0] : tool_span[1]
             ]  # shape: (num_heads, query_len, tool_len)
-            attn_mean_on_query_tool = attn_query_to_tool.mean(
+            attn_sum_on_query_tool = attn_query_to_tool.sum(
                 dim=(1, 2)
             )  # shape: (num_heads,)
-            toolwise_scores[tool_id, layer_ix] = attn_mean_on_query_tool
+            toolwise_scores[tool_id, layer_ix] = attn_sum_on_query_tool
 
     return toolwise_scores
 
